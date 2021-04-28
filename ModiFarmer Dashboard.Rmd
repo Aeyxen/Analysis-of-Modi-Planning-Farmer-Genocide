@@ -1,0 +1,77 @@
+---
+title: "#ModiPlanningFarmerGenocide Dashboard"
+author: Adnan Abbasi
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(knitr)
+library(tidyverse)
+library(tidytext)
+library(widyr)
+library(igraph)
+library(ggraph)
+library(tm)
+library(wordcloud2)
+```
+
+```{r}
+tweetData <- read.csv('ModiHasgTagSinceJan30.csv',header = TRUE,sep ="\t",dec=",",numerals="warn.loss",as.is = TRUE,stringsAsFactors =FALSE)
+englishData <- subset(tweetData, language == 'en')
+corpus <- iconv(englishData$tweet, to = "utf-8-mac")
+corpus <- Corpus(VectorSource(corpus))
+
+corpus <- tm_map(corpus,tolower)
+corpus <- tm_map(corpus,removePunctuation)
+corpus <- tm_map(corpus,removeNumbers)
+cleanset <- tm_map(corpus,removeWords, stopwords(kind="english"))
+cleanset <- tm_map(cleanset, stripWhitespace)
+
+tdm <- TermDocumentMatrix(cleanset)
+tdm <- as.matrix (tdm)
+words <- sort(rowSums(tdm),decreasing=TRUE) 
+wordFreq <- data.frame(word = names(words),freq=words)
+topWordFreq <- subset(wordFreq, freq > 500)
+topWordFreq <- topWordFreq[-1,] #Removed ModiPlanningFarmerGenocide, because it is an outlier
+topWordFreq <- topWordFreq[-1,] #Removed Farmer, because it is an outlier
+```
+
+Wordcloud
+=====================================
+
+```{r}
+wordcloud2(topWordFreq, size = 0.7, shape = 'square')
+```
+
+Word Correlation
+=====================================
+
+```{r}
+tweetWords <- englishData %>%
+  unnest_tokens(output = word, input = tweet) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word, "[:alpha:]")) %>%
+  distinct()
+
+wordMentions <- tweetWords %>%
+  count(word, name = "users_n") %>%
+  filter(users_n >= 100)
+
+wordCorrel <- tweetWords %>%
+  semi_join(wordMentions, by = "word") %>%
+  pairwise_cor(item = word, feature = username) %>%
+  filter(correlation >= 0.4)
+
+graph_from_data_frame(d = wordCorrel,
+                      vertices = wordMentions %>%
+                        semi_join(wordCorrel, by = c("word" = "item1"))) %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(alpha = correlation)) +
+  geom_node_point() +
+  geom_node_text(aes(color = users_n, label = name), repel = TRUE)
+
+```
