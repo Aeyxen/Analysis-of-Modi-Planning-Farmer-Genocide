@@ -17,11 +17,16 @@ library(igraph)
 library(ggraph)
 library(tm)
 library(wordcloud2)
+library(ggplot2)
+library(plotly)
 ```
 
 ```{r}
 tweetData <- read.csv('ModiHasgTagSinceJan30.csv',header = TRUE,sep ="\t",dec=",",numerals="warn.loss",as.is = TRUE,stringsAsFactors =FALSE)
 englishData <- subset(tweetData, language == 'en')
+englishData$date <- as.Date(englishData$date, format= "%Y-%m-%d")
+englishData$time <- as.POSIXct(englishData$time, format="%H:%M")
+
 corpus <- iconv(englishData$tweet, to = "utf-8-mac")
 corpus <- Corpus(VectorSource(corpus))
 
@@ -40,6 +45,15 @@ topWordFreq <- topWordFreq[-1,] #Removed ModiPlanningFarmerGenocide, because it 
 topWordFreq <- topWordFreq[-1,] #Removed Farmer, because it is an outlier
 ```
 
+Distribution by Date
+=====================================
+
+```{r}
+
+ggplotly(ggplot(englishData, aes(x = date)) + 
+  geom_histogram())
+
+```
 Wordcloud
 =====================================
 
